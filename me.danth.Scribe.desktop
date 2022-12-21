@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Scribe
+Exec=/usr/bin/scribe
+StartupWMClass=me.danth.Scribe
+Type=Application
+Categories=ArtificialIntelligence;GTK
+Comment=A small GUI tool for text generation
