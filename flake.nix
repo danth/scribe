@@ -11,12 +11,30 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        model = pkgs.fetchgit {
-          url = "https://huggingface.co/facebook/opt-1.3b";
-          rev = "aa6ac1e23bb9a499be2b7400079cd2a7b8a1309a";
-          fetchLFS = true;
-          sha256 = "xHV+JNzdeR60uOFSqQ4TLgq6Z5LCmK0SvmWauEBRWAo=";
-        };
+        modelVersion = "aa6ac1e23bb9a499be2b7400079cd2a7b8a1309a";
+        model = pkgs.linkFarmFromDrvs "opt-1.3b" [
+          (pkgs.fetchurl {
+            url = "https://huggingface.co/facebook/opt-1.3b/resolve/${modelVersion}/merges.txt";
+            sha256 = "HOFmR3PFDz4MyIQmGak+3EYkUltyixiKngvjO3cmrcU=";
+          })
+          (pkgs.fetchurl {
+            url = "https://huggingface.co/facebook/opt-1.3b/resolve/${modelVersion}/config.json";
+            sha256 = "8arO77fTTTRumwQA2V/bSXBWe8vh1KuhBoxUAgmbZE8=";
+          })
+          (pkgs.fetchurl {
+            url = "https://huggingface.co/facebook/opt-1.3b/resolve/${modelVersion}/pytorch_model.bin";
+            sha256 = "z31clw1t29OwMAmzl8BCLhR+3VyAINR6jS+sCxGjsI0=";
+          })
+          (pkgs.fetchurl {
+            url = "https://huggingface.co/facebook/opt-1.3b/resolve/${modelVersion}/tokenizer_config.json";
+            sha256 = "0eQYW0OgoGQhq3IY1cGndTUL0TAkUHs0++0l3PbBTGs=";
+          })
+          (pkgs.fetchurl {
+            url = "https://huggingface.co/facebook/opt-1.3b/resolve/${modelVersion}/vocab.json";
+            sha256 = "BrTUbI51LUECE9lUjrJ6VNtw/aAxm2Jx+41Z3q1eHKs=";
+          })
+        ];
+
       in {
         packages.default = pkgs.python3Packages.buildPythonApplication {
           name = "scribe";
