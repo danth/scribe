@@ -2,6 +2,7 @@
 Name=Scribe
 Exec=/usr/bin/scribe
 StartupWMClass=me.danth.Scribe
+StartupNotify=true
 Type=Application
 Categories=ArtificialIntelligence;GTK
 Comment=A small GUI tool for text generation
