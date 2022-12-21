@@ -7,7 +7,9 @@ setup(
     author_email="danthwaites30@btinternet.com",
     packages=["scribe"],
     install_requires=[
-        "pygobject >=3,<4"
+        "pygobject >=3,<4",
+        "torch >=1,<2",
+        "transformers >=4,<5"
     ],
     entry_points={
         "console_scripts": [ "scribe=scribe.__main__:main" ]
