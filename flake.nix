@@ -15,7 +15,8 @@
           src = ./.;
           nativeBuildInputs = with pkgs; [ gobject-introspection wrapGAppsHook ];
           buildInputs = with pkgs; [ gtk4 libadwaita ];
-          propagatedBuildInputs = with pkgs.python3Packages; [ pygobject3 ];
+          propagatedBuildInputs = with pkgs.python3Packages; [ pygobject3 torch transformers ];
+          doCheck = false;
         };
       }
     );
