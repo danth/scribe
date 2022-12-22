@@ -8,7 +8,14 @@ from threading import Thread
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-MODEL = "facebook/opt-1.3b"
+MODELS = {
+    "OPT 125M": "facebook/opt-125m",
+    "OPT 350M": "facebook/opt-350m",
+    "OPT 1.3B": "facebook/opt-1.3b",
+    "OPT 2.7B": "facebook/opt-2.7b"
+}
+MODEL_NAMES = list(MODELS.keys())
+DEFAULT_MODEL = "OPT 1.3B"
 
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
@@ -18,6 +25,13 @@ class MainWindow(Gtk.ApplicationWindow):
             default_width=600,
             default_height=250
         )
+
+        self.header_bar = Gtk.HeaderBar()
+        self.set_titlebar(self.header_bar)
+
+        self.model_dropdown = Gtk.DropDown.new_from_strings(MODEL_NAMES)
+        self.model_dropdown.connect('notify::selected-item', self.load_selected_model)
+        self.header_bar.pack_start(self.model_dropdown)
 
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_child(self.main_box)
@@ -58,7 +72,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.create_add_button(25)
         self.create_add_button(100)
 
-        self.load_model(MODEL)
+        self.load_model(DEFAULT_MODEL)
 
     def create_add_button(self, token_count):
         overlay = Gtk.Overlay()
@@ -70,14 +84,30 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.buttons.append(button)
 
+    def load_selected_model(self, _dropdown, _pspec):
+        item = self.model_dropdown.props.selected_item
+        if item is not None:
+            self.load_model(item.props.string)
+
     def load_model(self, model_name):
         self.start_working(f"Loading {model_name}", editable=True)
+
+        # Usually the model to load is already selected, but not during initialisation
+        selected_index = MODEL_NAMES.index(model_name)
+        self.model_dropdown.set_selected(selected_index)
 
         Thread(target=self.load_model_thread, args=(model_name,)).start()
 
     def load_model_thread(self, model_name):
-        self.model = AutoModelForCausalLM.from_pretrained(model_name)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        # Ensure the previous model is unloaded first, to reduce peak memory usage
+        if hasattr(self, "model"):
+            del self.model
+            del self.tokenizer
+
+        model_path = MODELS[model_name]
+
+        self.model = AutoModelForCausalLM.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
 
         GLib.idle_add(self.stop_working)
 
@@ -118,6 +148,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.entry.set_editable(editable)
 
+        self.model_dropdown.set_sensitive(False)
         for button in self.buttons:
             button.set_sensitive(False)
 
@@ -127,6 +158,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.entry.set_editable(True)
 
+        self.model_dropdown.set_sensitive(True)
         for button in self.buttons:
             button.set_sensitive(True)
 
