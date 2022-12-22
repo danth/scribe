@@ -15,10 +15,12 @@ MODELS = {
     "OPT 2.7B": "facebook/opt-2.7b"
 }
 MODEL_NAMES = list(MODELS.keys())
-DEFAULT_MODEL = "OPT 1.3B"
+DEFAULT_MODEL = MODEL_NAMES.index("OPT 1.3B")
 
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
+        self.model_name = None
+
         super().__init__(
             *args, **kwargs,
             title="Scribe",
@@ -30,13 +32,14 @@ class MainWindow(Gtk.ApplicationWindow):
         self.set_titlebar(self.header_bar)
 
         self.model_dropdown = Gtk.DropDown.new_from_strings(MODEL_NAMES)
-        self.model_dropdown.connect('notify::selected-item', self.load_selected_model)
+        self.model_dropdown.set_selected(DEFAULT_MODEL)
         self.header_bar.pack_start(self.model_dropdown)
 
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_child(self.main_box)
 
         self.info_bar = Gtk.InfoBar()
+        self.info_bar.set_revealed(False)
         self.main_box.append(self.info_bar)
 
         self.info_label = Gtk.Label(halign=Gtk.Align.START, hexpand=True)
@@ -72,8 +75,6 @@ class MainWindow(Gtk.ApplicationWindow):
         self.create_add_button(25)
         self.create_add_button(100)
 
-        self.load_model(DEFAULT_MODEL)
-
     def create_add_button(self, token_count):
         overlay = Gtk.Overlay()
         self.button_box.append(overlay)
@@ -84,43 +85,38 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.buttons.append(button)
 
-    def load_selected_model(self, _dropdown, _pspec):
-        item = self.model_dropdown.props.selected_item
-        if item is not None:
-            self.load_model(item.props.string)
-
     def load_model(self, model_name):
-        self.start_working(f"Loading {model_name}", editable=True)
-
-        # Usually the model to load is already selected, but not during initialisation
-        selected_index = MODEL_NAMES.index(model_name)
-        self.model_dropdown.set_selected(selected_index)
-
-        Thread(target=self.load_model_thread, args=(model_name,)).start()
-
-    def load_model_thread(self, model_name):
         # Ensure the previous model is unloaded first, to reduce peak memory usage
-        if hasattr(self, "model"):
+        if self.model_name is not None:
             del self.model
             del self.tokenizer
 
         model_path = MODELS[model_name]
 
+        self.model_name = model_name
         self.model = AutoModelForCausalLM.from_pretrained(model_path)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
 
-        GLib.idle_add(self.stop_working)
+        GLib.idle_add(self.start_working, "Generating text")
 
     def add(self, token_count):
-        self.start_working("Generating text")
+        model_name = self.model_dropdown.props.selected_item.props.string
+
+        if self.model_name == model_name:
+            self.start_working("Generating text")
+        else:
+            self.start_working(f"Loading {model_name}")
 
         start = self.entry.get_buffer().get_start_iter()
         end = self.entry.get_buffer().get_end_iter()
         text = self.entry.get_buffer().get_text(start, end, True)
 
-        Thread(target=self.add_thread, args=(token_count, text)).start()
+        Thread(target=self.add_thread, args=(token_count, model_name, text)).start()
 
-    def add_thread(self, token_count, text):
+    def add_thread(self, token_count, model_name, text):
+        if self.model_name != model_name:
+            self.load_model(model_name)
+
         input_ids = self.tokenizer(text, return_tensors="pt").input_ids
 
         generated_ids = self.model.generate(
@@ -141,12 +137,12 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.stop_working()
 
-    def start_working(self, message, editable=False):
+    def start_working(self, message):
         self.info_bar.set_revealed(True)
         self.info_spinner.start()
         self.info_label.set_text(message)
 
-        self.entry.set_editable(editable)
+        self.entry.set_editable(False)
 
         self.model_dropdown.set_sensitive(False)
         for button in self.buttons:
