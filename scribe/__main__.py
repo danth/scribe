@@ -10,13 +10,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODEL = "facebook/opt-1.3b"
 
-print("Loading model...")
-model = AutoModelForCausalLM.from_pretrained(MODEL)
-
-print("Loading tokenizer...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=False)
-
-
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(
@@ -29,19 +22,24 @@ class MainWindow(Gtk.ApplicationWindow):
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.set_child(self.main_box)
 
-        self.overlay = Gtk.Overlay()
-        self.main_box.append(self.overlay)
+        self.info_bar = Gtk.InfoBar()
+        self.main_box.append(self.info_bar)
 
-        self.entry = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR, vexpand=True)
-        self.overlay.set_child(self.entry)
+        self.info_label = Gtk.Label(halign=Gtk.Align.START, hexpand=True)
+        self.info_bar.add_child(self.info_label)
 
-        self.spinner = Gtk.Spinner(
-            halign=Gtk.Align.END,
-            margin_end=10,
-            valign=Gtk.Align.END,
+        self.info_spinner = Gtk.Spinner()
+        self.info_bar.add_child(self.info_spinner)
+
+        self.entry = Gtk.TextView(
+            wrap_mode=Gtk.WrapMode.WORD_CHAR,
+            vexpand=True,
+            margin_start=5,
+            margin_end=5,
+            margin_top=5,
             margin_bottom=5
         )
-        self.overlay.add_overlay(self.spinner)
+        self.main_box.append(self.entry)
 
         self.button_box = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL,
@@ -60,6 +58,8 @@ class MainWindow(Gtk.ApplicationWindow):
         self.create_add_button(25)
         self.create_add_button(100)
 
+        self.load_model(MODEL)
+
     def create_add_button(self, token_count):
         overlay = Gtk.Overlay()
         self.button_box.append(overlay)
@@ -70,13 +70,19 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.buttons.append(button)
 
+    def load_model(self, model_name):
+        self.start_working(f"Loading {model_name}", editable=True)
+
+        Thread(target=self.load_model_thread, args=(model_name,)).start()
+
+    def load_model_thread(self, model_name):
+        self.model = AutoModelForCausalLM.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+
+        GLib.idle_add(self.stop_working)
+
     def add(self, token_count):
-        self.entry.set_editable(False)
-
-        for button in self.buttons:
-            button.set_sensitive(False)
-
-        self.spinner.start()
+        self.start_working("Generating text")
 
         start = self.entry.get_buffer().get_start_iter()
         end = self.entry.get_buffer().get_end_iter()
@@ -85,8 +91,9 @@ class MainWindow(Gtk.ApplicationWindow):
         Thread(target=self.add_thread, args=(token_count, text)).start()
 
     def add_thread(self, token_count, text):
-        input_ids = tokenizer(text, return_tensors="pt").input_ids
-        generated_ids = model.generate(
+        input_ids = self.tokenizer(text, return_tensors="pt").input_ids
+
+        generated_ids = self.model.generate(
             input_ids,
             num_return_sequences=1,
             max_new_tokens=token_count,
@@ -94,19 +101,34 @@ class MainWindow(Gtk.ApplicationWindow):
             temperature=1,
             top_k=25
         )
-        result = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+
+        result = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
         GLib.idle_add(self.show_output, result[0])
 
     def show_output(self, result):
         self.entry.get_buffer().set_text(result)
 
-        self.spinner.stop()
+        self.stop_working()
+
+    def start_working(self, message, editable=False):
+        self.info_bar.set_revealed(True)
+        self.info_spinner.start()
+        self.info_label.set_text(message)
+
+        self.entry.set_editable(editable)
+
+        for button in self.buttons:
+            button.set_sensitive(False)
+
+    def stop_working(self):
+        self.info_bar.set_revealed(False)
+        self.info_spinner.stop()
+
+        self.entry.set_editable(True)
 
         for button in self.buttons:
             button.set_sensitive(True)
-
-        self.entry.set_editable(True)
 
 
 class MyApp(Adw.Application):
