@@ -94,7 +94,7 @@ class MainWindow(Gtk.ApplicationWindow):
         model_path = MODELS[model_name]
 
         self.model_name = model_name
-        self.model = AutoModelForCausalLM.from_pretrained(model_path)
+        self.model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
 
         GLib.idle_add(self.start_working, "Generating text")
