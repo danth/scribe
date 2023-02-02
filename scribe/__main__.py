@@ -6,7 +6,7 @@ from gi.repository import Gtk, GLib, Adw
 from threading import Thread
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import transformers
 
 MODELS = {
     "OPT 125M": "facebook/opt-125m",
@@ -88,14 +88,15 @@ class MainWindow(Gtk.ApplicationWindow):
     def load_model(self, model_name):
         # Ensure the previous model is unloaded first, to reduce peak memory usage
         if self.model_name is not None:
-            del self.model
-            del self.tokenizer
-
-        model_path = MODELS[model_name]
+            del self.pipeline
 
         self.model_name = model_name
-        self.model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
+        self.pipeline = transformers.pipeline(
+            "text-generation",
+            model=MODELS[model_name],
+            max_new_tokens=1,
+            do_sample=True
+        )
 
         GLib.idle_add(self.start_working, "Generating text")
 
@@ -117,20 +118,10 @@ class MainWindow(Gtk.ApplicationWindow):
         if self.model_name != model_name:
             self.load_model(model_name)
 
-        input_ids = self.tokenizer(text, return_tensors="pt").input_ids
+        results = self.pipeline(text, max_new_tokens=token_count)
+        result = results[0]["generated_text"]
 
-        generated_ids = self.model.generate(
-            input_ids,
-            num_return_sequences=1,
-            max_new_tokens=token_count,
-            do_sample=True,
-            temperature=1,
-            top_k=25
-        )
-
-        result = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
-
-        GLib.idle_add(self.show_output, result[0])
+        GLib.idle_add(self.show_output, result)
 
     def show_output(self, result):
         self.entry.get_buffer().set_text(result)
